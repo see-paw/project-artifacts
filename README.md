@@ -50,7 +50,7 @@ The project follows **Agile methodologies (Scrum)** and is managed using **GitHu
 
 | Version | Description | Date |
 |----------|--------------|------|
-| **v1.0.0 (Milestone 1)** | Delivery of initial management artifacts and documentation
+| **v1.0.0 (Milestone 1)** | Delivery of initial management artifacts and documentation | 26/9/2025 |
 
 ---
 
