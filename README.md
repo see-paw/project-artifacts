@@ -1,10 +1,10 @@
-# 🐾 SeePaw — Project Artifacts
+# 🐾🏠 SeePaw — Project Artifacts
 
 This repository contains all **management and documentation artifacts** related to the **SeePaw** platform — a digital solution connecting **Animal Shelter Centers (CAAs)** and the **community** to promote animal **adoption**, **fostering**, and **responsible ownership**. These are the deliverables that are priorly homologated and later submitted for project evaluation.
 
 ---
 
-## 📘 Project Overview
+## 🐕‍🦺 Project Overview
 
 The **SeePaw** platform aims to:
 - Streamline animal adoption and fostering processes.
@@ -34,9 +34,10 @@ The project follows **Agile methodologies (Scrum)** and is managed using **GitHu
 | **G2_823095_8230112_8230091_8230098.zip** | Compressed delivery package containing milestone submission. |
 | **README.md** | This file — repository overview and documentation. |
 
+😸
 ---
 
-## 🧩 Project Management Methodology
+## 🐈‍⬛ Project Management Methodology
 
 - **Methodology:** Agile (Scrum)  
 - **Version Control:** GitHub  
@@ -46,7 +47,7 @@ The project follows **Agile methodologies (Scrum)** and is managed using **GitHu
 
 ---
 
-## 📦 Current Release
+## 😻 Current Release
 
 | Version | Description | Date |
 |----------|--------------|------|
@@ -54,7 +55,7 @@ The project follows **Agile methodologies (Scrum)** and is managed using **GitHu
 
 ---
 
-## 👥 Contributors
+## 👥❤️🐾 Contributors
 
 | Name | Role |
 |------|------|
