@@ -1,0 +1,105 @@
+@startuml
+actor "Utilizador" as User
+participant "Sistema" as System
+database "Base de Dados" as DB
+actor "Admin CCA" as Admin
+
+title Submissão e Aprovação de Pedido de Ownership
+
+== Submissão do Pedido ==
+
+User -> System: Visualizar animal
+activate System
+System -> DB: Consultar estado do animal
+activate DB
+DB --> System: Animal disponível
+deactivate DB
+System --> User: Mostrar informação do animal
+
+User -> System: Clicar "Pedir Vínculo Responsável (Ownership)"
+System --> User: Apresentar formulário
+
+User -> System: Preencher e submeter formulário\n(nome, morada, dados pagamento, termos contratuais)
+System -> System: Validar dados
+
+System -> DB: Criar pedido de Ownership\n(estado: Pendente)
+activate DB
+DB --> System: Pedido criado (ID: #123)
+deactivate DB
+
+System --> User: Mensagem: "Pedido submetido\ncom sucesso"
+deactivate System
+
+System -> Admin: Notificação: Novo pedido de Ownership
+note right
+  Badge no menu
+  "Pedidos de Ownership"
+end note
+
+== Análise pelo Admin ==
+
+Admin -> System: Aceder inbox de pedidos de Ownership
+activate System
+System -> DB: Consultar pedidos de Ownership
+activate DB
+DB --> System: Lista de pedidos
+deactivate DB
+System --> Admin: Apresentar tabela de pedidos
+
+Admin -> System: Clicar "Ver Detalhes" do pedido #123
+System -> DB: Consultar detalhes do pedido
+activate DB
+DB --> System: Dados completos (utilizador, animal, formulário)
+deactivate DB
+System --> Admin: Mostrar detalhes do pedido
+
+alt Aprovação
+
+  Admin -> System: Clicar "Aprovar"\n(comentário opcional)
+  System -> DB: Verificar se animal ainda disponível
+   
+  System -> DB: Atualizar estado do pedido (Aprovado)\nCriar Ownership ativo\nAtualizar estado do animal
+  activate DB
+  DB --> System: Ownership criado
+  deactivate DB
+  
+  System --> Admin: Mensagem: "Pedido aprovado"
+  deactivate System
+  
+  System -> User: Notificação: Pedido aprovado
+  note right
+    Badge/Notificação/Toast na app
+    "A Minha Conta"
+  end note
+  
+  User -> System: Consultar estado do pedido
+  activate System
+  System -> DB: Consultar pedido #123
+  activate DB
+  DB --> System: Estado: Aprovado
+  deactivate DB
+  System --> User: Mostrar estado "Aprovado"\ne comentário do Admin
+  deactivate System
+
+else Recusa
+
+  Admin -> System: Clicar "Recusar"\n(motivo obrigatório)
+  System -> DB: Atualizar estado do pedido (Recusado)\nGuardar motivo
+  activate DB
+  DB --> System: Estado atualizado
+  deactivate DB
+  
+  System -> Admin: Atualização da linha da tabela: Pedido Recusado
+  System -> User: Notificação: Pedido recusado
+  
+  User -> System: Consultar estado do pedido
+  activate System
+  System -> DB: Consultar pedido #123
+  activate DB
+  DB --> System: Estado: Recusado, Motivo
+  deactivate DB
+  System --> User: Mostrar estado "Recusado"\ne motivo da recusa
+  deactivate System
+
+end
+@enduml
