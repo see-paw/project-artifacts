@@ -80,7 +80,7 @@ class SlotConvivencia {
   +id: UUID
   +dataHoraInicio: DateTime
   +dataHoraFim: DateTime
-  +estado: EstadoSlot
+  +reservado: Boolean
 }
 
 ' ================ VÍNCULO RESPONSÁVEL (Ownership) ================
@@ -174,11 +174,6 @@ enum EstadoPedido {
   EM_ANALISE
   APROVADO
   RECUSADO
-}
-
-enum EstadoSlot {
-  DISPONIVEL
-  RESERVADO
 }
 
 enum EstadoPagamento {
