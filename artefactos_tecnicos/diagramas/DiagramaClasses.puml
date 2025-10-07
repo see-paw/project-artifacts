@@ -1,0 +1,221 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+' ================ UTILIZADORES ================
+class Utilizador {
+  +id: UUID
+  +nome: String
+  +morada: String
+  +codPostal: String
+  +email: String
+  +contactoTelefone: String
+  +hashPassword: String
+  +role: Perfil
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+}
+
+class UtilizadorFinal {
+  +numVinculosResponsaveis: int
+  +numApadrinhamentos: int
+}
+
+class AdminCAA {
+}
+
+Utilizador <|-- UtilizadorFinal
+Utilizador <|-- AdminCAA
+
+' ================ CAA (Centro de Acolhimento Animal) ================
+class CAA {
+  +id: UUID
+  +nome: String
+  +morada: String
+  +distrito: String
+  +email: String
+  +contacto: String
+  +descricao: String (???)
+  +dataCriacao: DateTime
+}
+
+
+' ================ ANIMAIS ================
+class Animal {
+  +id: UUID
+  +nome: String
+  +especie: String
+  +raca: String
+  +cor: String
+  +sexo: Sexo
+  +porte: Porte
+  +idade: Integer
+  +dataEntrada: Date
+  +estadoAdocao: EstadoAdocao
+  +descricao: String
+  +informacaoSaude: String
+  +custoMensalEstimadoOwnership: Decimal
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+}
+
+class ImagemAnimal {
+  +id: UUID
+  +imagePath: String
+  +legenda: String
+  +createdAt: DateTime
+}
+
+' ================ APADRINHAMENTO (Fostering) ================
+class Apadrinhamento {
+  +id: UUID
+  +valorMensal: Decimal
+  +dataInicio: Date
+  +dataFim: Date
+  +estado: EstadoApadrinhamento
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+}
+
+class SlotConvivencia {
+  +id: UUID
+  +dataHoraInicio: DateTime
+  +dataHoraFim: DateTime
+  +estado: EstadoSlot
+}
+
+' ================ VÍNCULO RESPONSÁVEL (Ownership) ================
+class VinculoResponsavel {
+  +id: UUID
+  +dataInicio: Date
+  +dataFim: Date
+  +estado: EstadoVinculo
+  +estadoPedido: EstadoPedido
+  +urlContratoAssinado: String
+  +dataSubmissao: DateTime
+  +dataAprovacao: DateTime
+  +motivoRecusa: String
+  +observacoes: String
+}
+
+class PeriodoConvivencia {
+  +id: UUID
+  +dataInicio: Date
+  +dataFim: Date
+  +estadoPedido: EstadoPedido
+  +dataPedido: DateTime
+  +dataConfirmacao: DateTime
+  +observacoes: String
+}
+
+' ================ PAGAMENTOS (Mock) ================
+class Pagamento {
+  +id: UUID
+  +valor: Decimal
+  +dataPagamento: Date
+  +dataVencimento: Date
+  +estado: EstadoPagamento
+  +descricao: String
+  +createdAt: DateTime
+}
+
+' ================ OUTROS ================
+class Favorito {
+  +id: UUID
+  +createdAt: DateTime
+}
+
+class Notificacao {
+  +id: UUID
+  +titulo: String
+  +mensagem: String
+  +tipo: TipoNotificacao
+  +lida: Boolean
+  +createdAt: DateTime
+}
+
+' ================ ENUMS ================
+enum Perfil {
+  UTILIZADOR_FINAL
+  ADMIN_CAA
+  PLATFORM_ADMIN
+}
+
+enum Sexo {
+  M
+  F
+  INDEFINIDO
+}
+
+enum Porte {
+  PEQUENO
+  MEDIO
+  GRANDE
+}
+
+enum EstadoAdocao {
+  DISPONIVEL
+  FOSTERING
+  OWNERSHIP
+  INDISPONIVEL
+}
+
+enum EstadoApadrinhamento {
+  ATIVO
+  TERMINADO
+}
+
+enum EstadoVinculo {
+  ATIVO
+  TERMINADO
+}
+
+enum EstadoPedido {
+  PENDENTE
+  EM_ANALISE
+  APROVADO
+  RECUSADO
+}
+
+enum EstadoSlot {
+  DISPONIVEL
+  RESERVADO
+}
+
+enum EstadoPagamento {
+  PENDENTE
+  PAGO
+}
+
+enum TipoNotificacao {
+  PEDIDO_OWNERSHIP_APROVADO
+  PEDIDO_OWNERSHIP_RECUSADO
+  PAGAMENTO_CONFIRMADO
+  SLOT_CONFIRMADO
+  GERAL
+}
+
+' ================ RELAÇÕES CAA ================
+AdminCAA "1..*" -- "1" CAA : gere
+CAA "1" -- "0..*" Animal : abriga
+
+' ================ RELAÇÕES ANIMAL ================
+Animal "1" *-- "0..*" ImagemAnimal : possui
+
+' ================ RELAÇÕES APADRINHAMENTO ================
+UtilizadorFinal "1" -- "0..*" Apadrinhamento : patrocina
+Apadrinhamento  "*" -- "1" Animal : beneficia
+Apadrinhamento  "1" -- "0..*" SlotConvivencia : agenda
+Apadrinhamento  "1" -- "0..*" Pagamento : gera
+
+' ================ RELAÇÕES VÍNCULO RESPONSÁVEL ================
+UtilizadorFinal "1" -- "0..*" VinculoResponsavel : solicita
+VinculoResponsavel "0..1" -- "1" Animal : vincula
+VinculoResponsavel "1" -- "0..*" PeriodoConvivencia : agenda
+VinculoResponsavel "1" -- "0..*" Pagamento : associado
+
+' ================ RELAÇÕES UTILIZADOR ================
+UtilizadorFinal "1" -- "0..*" Favorito : marca
+Favorito "*" -- "1" Animal : refere
+
+UtilizadorFinal "1" -- "0..*" Notificacao : recebe
+@enduml
