@@ -1,5 +1,4 @@
 @startuml
-skinparam dpi 150
 skinparam classAttributeIconSize 0
 
 ' ================ UTILIZADORES ================
