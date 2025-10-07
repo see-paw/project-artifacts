@@ -1,0 +1,58 @@
+@startuml
+skinparam componentStyle rectangle
+
+' ========== CAMADA API ==========
+package "Camada API" {
+  component [REST API\nHTTP/REST] as API
+}
+
+' ========== CAMADA DE APLICAÇÃO (Serviços) ==========
+package "Camada de Aplicação/Serviços" {
+  component [Gestão de Utilizadores\ne Autenticação] as GestaoUtilizadores
+  component [Catálogo e Listagem\nde Animais] as CatalogoAnimais
+  component [Fostering\n(Apadrinhamento)] as Fostering
+  component [Ownership\n(Vínculo Responsável)] as Ownership
+  component [Gestão de CAA] as GestaoCaa
+  component [Notificações] as Notificacoes
+  component [Gestão de Ficheiros] as GestaoFicheiros
+  component [Favoritos] as Favoritos
+}
+
+' ========== CAMADA DE DOMÍNIO ==========
+package "Camada de Domínio" {
+  component [Entidades/Modelos] as Entidades
+}
+
+' ========== CAMADA DE ACESSO A DADOS ==========
+package "Camada de Acesso a Dados" {
+  component [Repositórios] as Repositorios
+}
+
+' ========== CAMADA DE PERSISTÊNCIA ==========
+package "Camada de Persistência" {
+  database "Base de Dados" as BD
+}
+
+' ========== RELAÇÕES ==========
+API -down-> GestaoUtilizadores : use
+API -down-> CatalogoAnimais : use
+API -down-> Fostering : use
+API -down-> Ownership : use
+API -down-> GestaoCaa : use
+API -down-> Notificacoes : use
+API -down-> GestaoFicheiros : use
+API -down-> Favoritos : use
+
+GestaoUtilizadores -down-> Entidades : use
+CatalogoAnimais -down-> Entidades : use
+Fostering -down-> Entidades : use
+Ownership -down-> Entidades : use
+GestaoCaa -down-> Entidades : use
+Notificacoes -down-> Entidades : use
+GestaoFicheiros -down-> Entidades : use
+Favoritos -down-> Entidades : use
+
+Entidades -down-> Repositorios : use
+
+Repositorios -down-> BD : persist
+@enduml
