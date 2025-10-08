@@ -55,7 +55,7 @@ System --> Admin: Mostrar detalhes do pedido
 
 alt Aprovação
 
-  Admin -> System: Clicar "Aprovar"\n(comentário opcional)
+  Admin -> System: Clicar "Aprovar"\n
   System -> DB: Verificar se animal ainda disponível
    
   System -> DB: Atualizar estado do pedido (Aprovado)\nCriar Ownership ativo\nAtualizar estado do animal
@@ -78,7 +78,7 @@ alt Aprovação
   activate DB
   DB --> System: Estado: Aprovado
   deactivate DB
-  System --> User: Mostrar estado "Aprovado"\ne comentário do Admin
+  System --> User: Mostrar estado "Aprovado"
   deactivate System
 
 else Recusa
