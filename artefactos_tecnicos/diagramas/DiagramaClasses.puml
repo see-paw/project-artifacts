@@ -142,6 +142,7 @@ enum Sexo {
 enum EstadoConvivencia {
   ATIVO
   CANCELADO
+  EFETUADO
 }
 
 enum Porte {
