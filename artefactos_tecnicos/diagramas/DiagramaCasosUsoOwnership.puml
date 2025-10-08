@@ -1,9 +1,7 @@
 @startuml
 left to right direction
 skinparam packageStyle rectangle
-
 actor "Utilizador" as User
-
 rectangle "Sistema de Ownership" {
   
   package "Candidatura" {
@@ -23,7 +21,6 @@ rectangle "Sistema de Ownership" {
   }
   
   ' Use cases internos do sistema
-  usecase "Utilizador autenticado" as UC_Auth
   usecase "Validar disponibilidade\ndo animal" as UC_Valid
   usecase "Ter Ownership\nAprovado" as UC_OwnershipAtivo
 }
@@ -37,20 +34,20 @@ User --> UC6
 User --> UC7
 
 ' Include - Submeter pedido
-UC2 ..> UC_Auth : <<include>>
 UC2 ..> UC_Valid : <<include>>
 
-' Include - Outras ações autenticadas
-UC3 ..> UC_Auth : <<include>>
-UC5 ..> UC_Auth : <<include>>
-UC6 ..> UC_Auth : <<include>>
-UC7 ..> UC_Auth : <<include>>
-
-' Require - Pré-condição de Ownership Ativo
+' Include - Pré-condição de Ownership Ativo
 UC5 ..> UC_OwnershipAtivo : <<include>>
 UC6 ..> UC_OwnershipAtivo : <<include>>
 UC7 ..> UC_OwnershipAtivo : <<include>>
 
 ' Extend - Notificações
 UC4 ..> UC3 : <<extend>>
+
+' Nota sobre autenticação
+note right of User
+  Todas as operações requerem
+  utilizador autenticado
+end note
+
 @enduml
