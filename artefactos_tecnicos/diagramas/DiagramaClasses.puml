@@ -79,11 +79,13 @@ class Apadrinhamento {
   +dataAtualizacao: DateTime
 }
 
-class SlotAtividade {
+' ================ Convivencia (SlotConvivencia + PeriodoConvivencia) ================
+class Convivencia {
   +id: String-GUID
   +dataHoraInicio: DateTime
   +dataHoraFim: DateTime
-  +reservado: Boolean
+  +estado: estadoConvivencia
+  +dataCriacao: DateTime
 }
 
 ' ================ VÍNCULO RESPONSÁVEL (Ownership) ================
@@ -97,16 +99,6 @@ class Ownership {
   +dataSubmissao: DateTime
   +dataAprovacao: DateTime
   +motivoRecusa: String
-}
-
-class PeriodoAtividade {
-  +id: String-GUID
-  +dataInicio: Date
-  +dataFim: Date
-  +estadoAtivo: Boolean
-  +dataPedido: DateTime
-  +dataConfirmacao: DateTime
-  +observacoes: String
 }
 
 ' ================ PAGAMENTOS (Mock) ================
@@ -145,6 +137,11 @@ enum Perfil {
 enum Sexo {
   M
   F
+}
+
+enum EstadoConvivencia {
+  ATIVO
+  CANCELADO
 }
 
 enum Porte {
@@ -193,17 +190,18 @@ CAA "1" -- "0..*" Animal : abriga
 
 ' ================ RELAÇÕES ANIMAL ================
 Animal "1" *-- "1..*" ImagemAnimal : possui
+Convivencia "0..*" -- "1" Animal
 
 ' ================ RELAÇÕES APADRINHAMENTO ================
 UtilizadorFinal "1" -- "0..*" Apadrinhamento : patrocina
 Apadrinhamento  "0..*" -- "1" Animal : beneficia
-Apadrinhamento  "1" -- "0..*" SlotAtividade : agenda
+Apadrinhamento  "1" -- "0..*" Convivencia : agenda
 Apadrinhamento  "1" -- "0..*" Pagamento : gera
 
 ' ================ RELAÇÕES VÍNCULO RESPONSÁVEL ================
 UtilizadorFinal "1" -- "0..*" Ownership : solicita
 Ownership "0..1" -- "1" Animal : vincula
-Ownership "1" -- "0..*" PeriodoAtividade : agenda
+Ownership "1" -- "0..*" Convivencia : agenda
 Ownership "1" -- "0..*" Pagamento : associado
 
 ' ================ RELAÇÕES UTILIZADOR ================
