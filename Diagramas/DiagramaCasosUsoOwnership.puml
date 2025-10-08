@@ -1,0 +1,53 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+actor "Utilizador" as User
+rectangle "Sistema de Ownership" {
+  
+  package "Candidatura" {
+    usecase "Visualizar informação\nsobre Ownership" as UC1
+    usecase "Submeter pedido\nde Ownership" as UC2
+  }
+  
+  package "Acompanhamento" {
+    usecase "Consultar estado\ndo pedido" as UC3
+    usecase "Receber notificação de\naprovação/recusa" as UC4
+  }
+  
+  package "Ownership Ativo" {
+    usecase "Agendar visita\nao animal" as UC5
+    usecase "Agendar levantamento\ntemporário" as UC6
+    usecase "Efetuar pagamento\nmensal (mock)" as UC7
+  }
+  
+  ' Use cases internos do sistema
+  usecase "Validar disponibilidade\ndo animal" as UC_Valid
+  usecase "Ter Ownership\nAprovado" as UC_OwnershipAtivo
+}
+
+' Relações do Utilizador
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC5
+User --> UC6
+User --> UC7
+
+' Include - Submeter pedido
+UC2 ..> UC_Valid : <<include>>
+
+' Include - Pré-condição de Ownership Ativo
+UC5 ..> UC_OwnershipAtivo : <<include>>
+UC6 ..> UC_OwnershipAtivo : <<include>>
+UC7 ..> UC_OwnershipAtivo : <<include>>
+
+' Extend - Notificações
+UC4 ..> UC3 : <<extend>>
+
+' Nota sobre autenticação
+note right of User
+  Todas as operações requerem
+  utilizador autenticado
+end note
+
+@enduml
