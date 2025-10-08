@@ -190,7 +190,7 @@ enum TipoNotificacao {
 }
 
 ' ================ RELAÇÕES CAA ================
-AdminCAA "1..*" -- "1" CAA : gere
+AdminCAA "1" -- "1" CAA : gere
 CAA "1" -- "0..*" Animal : abriga
 
 ' ================ RELAÇÕES ANIMAL ================
