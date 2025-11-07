@@ -1,0 +1,285 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+' ================ UTILIZADORES ================
+class Utilizador {
+  +id: String-GUID
+  +userName: String
+  +email: String
+  +hashPassword: String
+  +nome: String
+  +dataNasc: DateTime
+  +morada: String
+  +cidade: String
+  +codPostal: String
+  +contactoTelefone: String
+  +perfil: Perfil
+  +shelterId: String-GUID [0..1]
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+}
+
+' ================ CAA (Centro de Acolhimento Animal / Shelter) ================
+class CAA {
+  +id: String-GUID
+  +nome: String
+  +morada: String
+  +cidade: String
+  +codPostal: String
+  +telefone: String
+  +nif: String
+  +horaAbertura: TimeOnly
+  +horaFecho: TimeOnly
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+}
+
+' ================ RAÇA ================
+class Raca {
+  +id: String-GUID
+  +nome: String
+  +descricao: String
+  +dataCriacao: DateTime
+}
+
+' ================ ANIMAIS ================
+class Animal {
+  +id: String-GUID
+  +nome: String
+  +estadoAnimal: EstadoAnimal
+  +descricao: String
+  +especie: Especie
+  +porte: Porte
+  +sexo: Sexo
+  +cor: String
+  +dataNasc: DateOnly
+  +esterilizado: Boolean
+  +custoMensal: Decimal
+  +caracteristicas: String
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+  +shelterId: String-GUID
+  +racaId: String-GUID
+  +donoId: String-GUID [0..1]
+  +dataInicioOwnership: DateTime [0..1]
+  +dataFimOwnership: DateTime [0..1]
+}
+
+class ImagemAnimal {
+  +id: String-GUID
+  +publicId: String
+  +url: String
+  +descricao: String
+  +imagemPrincipal: Boolean
+  +animalId: String-GUID [0..1]
+  +shelterId: String-GUID [0..1]
+  +dataCriacao: DateTime
+}
+
+' ================ APADRINHAMENTO (Fostering) ================
+class Apadrinhamento {
+  +id: String-GUID
+  +animalId: String-GUID
+  +utilizadorId: String-GUID
+  +valorMensal: Decimal
+  +estado: EstadoApadrinhamento
+  +dataInicio: DateTime
+  +dataFim: DateTime [0..1]
+  +dataAtualizacao: DateTime
+}
+
+' ================ ATIVIDADE (Activity - antigo Convivencia) ================
+class Atividade {
+  +id: String-GUID
+  +animalId: String-GUID
+  +utilizadorId: String-GUID
+  +tipo: TipoAtividade
+  +estado: EstadoAtividade
+  +dataInicio: DateTime
+  +dataFim: DateTime
+  +dataCriacao: DateTime
+}
+
+' ================ SLOTS (Scheduling) ================
+abstract class Slot {
+  +id: String-GUID
+  +dataHoraInicio: DateTime
+  +dataHoraFim: DateTime
+  +estado: EstadoSlot
+  +tipo: TipoSlot
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+}
+
+class SlotAtividade {
+  +atividadeId: String-GUID
+}
+
+class SlotIndisponibilidadeShelter {
+  +shelterId: String-GUID
+  +motivo: String
+}
+
+' ================ PEDIDO DE OWNERSHIP ================
+class PedidoOwnership {
+  +id: String-GUID
+  +animalId: String-GUID
+  +utilizadorId: String-GUID
+  +valor: Decimal
+  +estado: EstadoPedidoOwnership
+  +infoAdicional: String
+  +dataSubmissao: DateTime
+  +dataAprovacao: DateTime [0..1]
+  +dataAtualizacao: DateTime
+}
+
+' ================ OUTROS ================
+class Favorito {
+  +id: String-GUID
+  +utilizadorId: String-GUID
+  +animalId: String-GUID
+  +ativo: Boolean
+  +dataCriacao: DateTime
+  +dataAtualizacao: DateTime
+}
+
+class Notificacao {
+  +id: String-GUID
+  +utilizadorId: String-GUID [0..1]
+  +tipo: TipoNotificacao
+  +mensagem: String
+  +lida: Boolean
+  +dataCriacao: DateTime
+  +dataLeitura: DateTime [0..1]
+  +animalId: String-GUID [0..1]
+  +pedidoOwnershipId: String-GUID [0..1]
+  +atividadeId: String-GUID [0..1]
+  +broadcast: Boolean
+  +perfilAlvo: String
+}
+
+' ================ ENUMS ================
+enum Perfil {
+  User
+  AdminCAA
+}
+
+enum Sexo {
+  Male
+  Female
+}
+
+enum Especie {
+  Dog
+  Cat
+}
+
+enum EstadoAtividade {
+  Active
+  Cancelled
+  Completed
+}
+
+enum TipoAtividade {
+  Fostering
+  Ownership
+}
+
+enum Porte {
+  Small
+  Medium
+  Large
+}
+
+enum EstadoAnimal {
+  Available
+  PartiallyFostered
+  TotallyFostered
+  HasOwner
+  Inactive
+}
+
+enum EstadoApadrinhamento {
+  Active
+  Cancelled
+  Terminated
+}
+
+enum EstadoPedidoOwnership {
+  Pending
+  Analysing
+  Approved
+  Rejected
+}
+
+enum EstadoSlot {
+  Available
+  Unavailable
+  Reserved
+}
+
+enum TipoSlot {
+  Activity
+  ShelterUnavailable
+}
+
+enum TipoNotificacao {
+  NovoPedidoOwnership
+  PedidoOwnershipAprovado
+  PedidoOwnershipEmAnalise
+  PedidoOwnershipRejeitado
+  NovoAnimalAdicionado
+  AnimalApadrinhadorAdotado
+  NovaAtividadeOwnership
+  LembreteInicioAtividadeOwnershipUtilizador
+  LembreteFimAtividadeOwnershipUtilizador
+  LembreteInicioAtividadeOwnershipAdmin
+  LembreteFimAtividadeOwnershipAdmin
+  LembreteInicioAtividadeApadrinhamentoUtilizador
+  LembreteFimAtividadeApadrinhamentoUtilizador
+  LembreteInicioAtividadeApadrinhamentoAdmin
+  LembreteFimAtividadeApadrinhamentoAdmin
+}
+
+' ================ HERANÇA ================
+Slot <|-- SlotAtividade
+Slot <|-- SlotIndisponibilidadeShelter
+
+' ================ RELAÇÕES CAA ================
+Utilizador "1" -- "0..1" CAA : gere
+CAA "1" -- "0..*" Animal : abriga
+
+' ================ RELAÇÕES RAÇA ================
+Raca "1" -- "0..*" Animal : classifica
+
+' ================ RELAÇÕES ANIMAL ================
+Animal "1" *-- "1..*" ImagemAnimal : possui
+Atividade "0..*" -- "1" Animal : envolve
+Utilizador "1" -- "0..*" Animal : possui
+
+' ================ RELAÇÕES APADRINHAMENTO ================
+Utilizador "1" -- "0..*" Apadrinhamento : patrocina
+Apadrinhamento "0..*" -- "1" Animal : beneficia
+
+' ================ RELAÇÕES ATIVIDADE ================
+Utilizador "1" -- "0..*" Atividade : participa
+Atividade "1" -- "0..1" SlotAtividade : reserva
+
+' ================ RELAÇÕES SLOTS ================
+CAA "1" -- "0..*" SlotIndisponibilidadeShelter : define
+
+' ================ RELAÇÕES PEDIDO OWNERSHIP ================
+Utilizador "1" -- "0..*" PedidoOwnership : solicita
+PedidoOwnership "0..*" -- "1" Animal : requer
+
+' ================ RELAÇÕES UTILIZADOR ================
+Utilizador "1" -- "0..*" Favorito : marca
+Favorito "0..*" -- "1" Animal : refere
+
+' ================ RELAÇÕES NOTIFICAÇÃO ================
+Utilizador "1" -- "0..*" Notificacao : recebe
+Notificacao "0..*" -- "0..1" Animal : refere
+Notificacao "0..*" -- "0..1" PedidoOwnership : notifica
+Notificacao "0..*" -- "0..1" Atividade : informa
+
+@enduml
