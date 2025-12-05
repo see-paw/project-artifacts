@@ -1,0 +1,282 @@
+﻿name: E2E Tests - Playwright
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  SEED_MODE: "Frontend"
+  DOTNET_VERSION: "8.0.x"
+  NODE_VERSION: "lts/*"
+  BACKEND_PORT: 5000
+  FRONTEND_PORT: 3000
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: seepaw
+          POSTGRES_PASSWORD: seepawpwd
+          POSTGRES_DB: seepaw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout frontend (repositorio atual)
+        uses: actions/checkout@v4
+        with:
+          path: frontend
+
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          repository: see-paw/backend
+          ref: main
+          path: backend
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/backend.sln', '**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Restaurar dependencias do backend
+        working-directory: backend
+        run: dotnet restore backend.sln
+
+      - name: Compilar backend
+        working-directory: backend
+        run: dotnet build backend.sln --no-restore --configuration Release
+
+      - name: Instalar dependencias do frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Definir VITE_API_URL para o CI
+        working-directory: frontend
+        run: |
+          echo "VITE_API_URL=http://localhost:${{ env.BACKEND_PORT }}/api" > .env.production
+
+      - name: Limpar artefactos TypeScript antigos
+        working-directory: frontend
+        run: |
+          echo "Limpando ficheiros .d.ts antigos..."
+          find src -name "*.d.ts" -type f ! -name "vite-env.d.ts" ! -name "css-modules.d.ts" -delete || true
+          rm -rf dist .tsbuildinfo 2>/dev/null || true
+          echo "Limpeza concluida"
+
+      - name: Build frontend para producao
+        working-directory: frontend
+        run: |
+          echo "Compilando frontend..."
+          npm run build
+          echo "Build concluido"
+          ls -lah dist/
+
+      - name: Upload build do frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist/
+          retention-days: 7
+
+      - name: Instalar browsers do Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium firefox
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - name: Iniciar backend
+        working-directory: backend
+        env:
+          ASPNETCORE_ENVIRONMENT: Testing
+          ASPNETCORE_URLS: http://localhost:${{ env.BACKEND_PORT }}
+          ConnectionStrings__DefaultConnection: ${{ secrets.DB_CONNECTION_STRING }}
+          CloudinarySettings__CloudName: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CloudinarySettings__ApiKey: ${{ secrets.CLOUDINARY_API_KEY }}
+          CloudinarySettings__ApiSecret: ${{ secrets.CLOUDINARY_API_SECRET }}
+          JWT__Issuer: ${{ secrets.JWT_ISSUER }}
+          JWT__Audience: ${{ secrets.JWT_AUDIENCE }}
+          JWT__SigningKey: ${{ secrets.JWT_SIGNING_KEY }}
+        run: |
+          echo "Iniciando backend na porta ${{ env.BACKEND_PORT }}..."
+          dotnet run --project WebAPI/WebAPI.csproj --no-build --configuration Release > backend.log 2>&1 &
+          echo $! > backend_pid.txt
+          echo "Backend iniciado (PID: $(cat backend_pid.txt))"
+
+      - name: Aguardar backend estar pronto com dados
+        run: |
+          echo "Aguardando backend em http://localhost:${{ env.BACKEND_PORT }}..."
+          max_attempts=60
+          attempt=0
+          
+          while [ $attempt -lt $max_attempts ]; do
+            animals_response=$(curl -k -s "http://localhost:${{ env.BACKEND_PORT }}/api/animals?page=1" 2>/dev/null || echo "{}")
+            total=$(echo "$animals_response" | jq -r '.totalCount // 0' 2>/dev/null || echo "0")
+          
+            if [ "$total" -gt 0 ]; then
+              echo "✅ Backend pronto com $total animais!"
+              exit 0
+            fi
+          
+            if [ $((attempt % 10)) -eq 0 ]; then
+              echo "⏳ Tentativa $attempt/$max_attempts - seed ainda em progresso..."
+            fi
+          
+            attempt=$((attempt + 1))
+            sleep 2
+          done
+          
+          echo "❌ Backend não ficou pronto em 120s"
+          echo "Últimas 100 linhas do log:"
+          tail -n 100 backend/backend.log || true
+          exit 1
+
+      - name: Criar config temporario do Vite para preview
+        working-directory: frontend
+        run: |
+          echo "Criando vite.config.preview.js temporario..."
+          cat > vite.config.preview.js << 'EOF'
+          import { defineConfig } from 'vite'
+          import react from '@vitejs/plugin-react'
+          import path from 'path'
+          
+          export default defineConfig({
+            plugins: [react()],
+            server: {
+              port: 3000,
+            },
+            preview: {
+              port: 3000,
+              host: true,
+              strictPort: true,
+            },
+            resolve: {
+              alias: {
+                '@': path.resolve(__dirname, './src')
+              }
+            },
+            css: {
+              modules: {
+                localsConvention: 'camelCase'
+              }
+            }
+          })
+          EOF
+          echo "Config criado"
+
+      - name: Servir build com HTTP
+        working-directory: frontend
+        run: |
+          echo "Servindo build na porta ${{ env.FRONTEND_PORT }}..."
+          npx vite preview --config vite.config.preview.js > frontend.log 2>&1 &
+          echo $! > frontend_pid.txt
+          echo "Frontend servido (PID: $(cat frontend_pid.txt))"
+
+      - name: Aguardar frontend estar pronto
+        run: |
+          echo "Aguardando frontend em http://localhost:${{ env.FRONTEND_PORT }}..."
+          max_attempts=30
+          attempt=0
+          
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -s http://localhost:${{ env.FRONTEND_PORT }} > /dev/null 2>&1; then
+              echo "Frontend esta pronto!"
+              exit 0
+            fi
+          
+            attempt=$((attempt + 1))
+            echo "Tentativa $attempt/$max_attempts - aguardando..."
+            sleep 2
+          done
+          
+          echo "Frontend nao respondeu apos $max_attempts tentativas"
+          echo "Ultimas 50 linhas do log:"
+          tail -n 50 frontend/frontend.log || true
+          exit 1
+
+      - name: Executar testes E2E com Playwright
+        working-directory: frontend
+        env:
+          CI: true
+          VITE_API_URL: http://localhost:${{ env.BACKEND_PORT }}
+        run: |
+          echo "========================================="
+          echo "   TESTES E2E - PLAYWRIGHT"
+          echo "========================================="
+          npx playwright test --reporter=html,list
+
+      - name: Upload relatorio Playwright
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/test-results/
+          retention-days: 7
+
+      - name: Upload traces e screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-traces
+          path: frontend/test-results/
+          retention-days: 7
+
+      - name: Upload logs do backend (se falhar)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-logs
+          path: backend/backend.log
+          retention-days: 3
+
+      - name: Upload logs do frontend (se falhar)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: frontend-logs
+          path: frontend/frontend.log
+          retention-days: 3
+
+      - name: Parar servidores
+        if: always()
+        run: |
+          echo "Encerrando servidores..."
+          kill $(cat backend/backend_pid.txt) 2>/dev/null || true
+          kill $(cat frontend/frontend_pid.txt) 2>/dev/null || true
+          echo "Cleanup concluido"

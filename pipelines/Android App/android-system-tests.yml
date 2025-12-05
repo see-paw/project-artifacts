@@ -1,0 +1,428 @@
+name: Android System Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  BACKEND_PORT: 5000
+  JAVA_VERSION: "17"
+  ANDROID_API_LEVEL: 36
+  ANDROID_BUILD_TOOLS: "35.0.0"
+  BACKEND_IMAGE: ghcr.io/see-paw/backend:main
+
+jobs:
+  system-tests:
+    name: Run System Tests with Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: seepaw
+          POSTGRES_PASSWORD: seepawpwd
+          POSTGRES_DB: seepaw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ==================== DOCKER E BACKEND ====================
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Backend Docker Image
+        run: |
+          echo "🐳 Pulling backend image..."
+          docker pull ${{ env.BACKEND_IMAGE }}
+
+      - name: Start Backend Container
+        env:
+          ASPNETCORE_ENVIRONMENT: Testing
+          ConnectionStrings__DefaultConnection: ${{ secrets.DB_CONNECTION_STRING }}
+          CloudinarySettings__CloudName: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CloudinarySettings__ApiKey: ${{ secrets.CLOUDINARY_API_KEY }}
+          CloudinarySettings__ApiSecret: ${{ secrets.CLOUDINARY_API_SECRET }}
+          JWT__Issuer: ${{ secrets.JWT_ISSUER }}
+          JWT__Audience: ${{ secrets.JWT_AUDIENCE }}
+          JWT__SigningKey: ${{ secrets.JWT_SIGNING_KEY }}
+        run: |
+          echo "🚀 Starting backend container..."
+          docker run -d \
+            --name seepaw-backend \
+            --network host \
+            -e ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT}" \
+            -e ASPNETCORE_URLS="http://+:${{ env.BACKEND_PORT }}" \
+            -e ConnectionStrings__DefaultConnection="${ConnectionStrings__DefaultConnection}" \
+            -e CloudinarySettings__CloudName="${CloudinarySettings__CloudName}" \
+            -e CloudinarySettings__ApiKey="${CloudinarySettings__ApiKey}" \
+            -e CloudinarySettings__ApiSecret="${CloudinarySettings__ApiSecret}" \
+            -e JWT__Issuer="${JWT__Issuer}" \
+            -e JWT__Audience="${JWT__Audience}" \
+            -e JWT__SigningKey="${JWT__SigningKey}" \
+            ${{ env.BACKEND_IMAGE }}
+          
+          echo "⏳ Waiting for backend to initialize..."
+          sleep 10
+
+      - name: Verify Backend Health with Real Data
+        run: |
+          echo "🏥 Checking backend with real data verification..."
+          max_attempts=60
+          attempt=0
+          
+          while [ $attempt -lt $max_attempts ]; do
+            animals_response=$(curl -k -s "http://localhost:${{ env.BACKEND_PORT }}/api/Animals?pageNumber=1" 2>/dev/null || echo "{}")
+            total=$(echo "$animals_response" | jq -r '.totalCount // 0' 2>/dev/null || echo "0")
+          
+            if [ "$total" -gt 0 ]; then
+              echo "✅ Backend pronto com $total animais na base de dados!"
+              echo "📊 Sample response:"
+              echo "$animals_response" | jq '.' | head -30
+              exit 0
+            fi
+          
+            if [ $((attempt % 10)) -eq 0 ]; then
+              echo "⏳ Tentativa $attempt/$max_attempts - seed ainda em progresso..."
+            fi
+          
+            attempt=$((attempt + 1))
+            sleep 2
+          done
+          
+          echo "❌ Backend não ficou pronto com dados em 120s"
+          echo "📋 Últimas 100 linhas dos logs do container:"
+          docker logs seepaw-backend --tail 100 || true
+          exit 1
+
+      # ==================== SETUP ANDROID ====================
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Install Android SDK Components
+        run: |
+          echo "📦 Installing Android SDK components..."
+          sdkmanager "platform-tools" \
+            "platforms;android-${{ env.ANDROID_API_LEVEL }}" \
+            "build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
+          
+          echo "✅ Installed components:"
+          sdkmanager --list_installed
+
+      - name: Cache Gradle Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.android/build-cache
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x ./gradlew
+
+      # ==================== BUILD APKs ====================
+
+      - name: Configure Backend URL
+        run: |
+          echo "🔧 Configurando URL do backend para testes..."
+          mkdir -p app/src/androidTest/assets
+          echo "BACKEND_URL=http://localhost:${{ env.BACKEND_PORT }}" > app/src/androidTest/assets/test.properties
+
+      - name: Build Debug APK
+        run: |
+          echo "🔨 Building debug APK..."
+          ./gradlew assembleDebug --stacktrace
+          
+          echo "✅ APK criado:"
+          ls -lh app/build/outputs/apk/debug/
+
+      - name: Build Android Test APK
+        run: |
+          echo "🔨 Building test APK..."
+          ./gradlew assembleDebugAndroidTest --stacktrace
+          
+          echo "✅ Test APK criado:"
+          ls -lh app/build/outputs/apk/androidTest/debug/
+
+      # ==================== EXECUTAR TESTES ====================
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Instrumented Tests with Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 30
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: Nexus 6
+          ram-size: 4096M
+          heap-size: 1024M
+          disk-size: 6096M
+          cores: 4
+          disable-animations: true
+          disable-spellchecker: true
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 900
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none -qemu -smp 4
+          script: |
+            adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;'
+            adb shell settings put global window_animation_scale 0.0
+            adb shell settings put global transition_animation_scale 0.0
+            adb shell settings put global animator_duration_scale 0.0
+            
+            echo "Waiting for emulator to stabilize"
+            sleep 5
+
+            # Limpar logcat e começar a capturar
+            adb logcat -c
+            adb logcat > emulator-logcat.txt &
+            LOGCAT_PID=$!
+
+            ./gradlew connectedDebugAndroidTest --stacktrace || true
+
+            # Parar captura
+            kill $LOGCAT_PID || true
+
+      # =================== LOG CAT =============================
+      
+      - name: Upload Emulator Logcat
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-logcat
+          path: emulator-logcat.txt
+          retention-days: 3
+
+      # ==================== GERAR RELATÓRIO ====================
+      - name: Generate Test Report
+        if: always()
+        run: |
+          echo "📊 Gerando relatório de testes..."
+          
+          # Criar relatório consolidado
+          mkdir -p test-reports
+          
+          echo "=========================================" > test-reports/summary.txt
+          echo "   RELATÓRIO DE TESTES - COMPOSE TESTING" >> test-reports/summary.txt
+          echo "=========================================" >> test-reports/summary.txt
+          echo "" >> test-reports/summary.txt
+          echo "📅 Data: $(date)" >> test-reports/summary.txt
+          echo "🔧 Backend: http://localhost:${{ env.BACKEND_PORT }}" >> test-reports/summary.txt
+          echo "" >> test-reports/summary.txt
+          
+          # Parsear resultados XML
+          total_tests=0
+          passed_tests=0
+          failed_tests=0
+          skipped_tests=0
+          
+          # Usar while read para lidar com espaços nos nomes
+          while IFS= read -r xml_file; do
+            echo "📄 Processando: $xml_file"
+            
+            # Contar testes (formato JUnit XML)
+            tests=$(grep -o 'tests="[0-9]*"' "$xml_file" | cut -d'"' -f2 || echo "0")
+            failures=$(grep -o 'failures="[0-9]*"' "$xml_file" | cut -d'"' -f2 || echo "0")
+            errors=$(grep -o 'errors="[0-9]*"' "$xml_file" | cut -d'"' -f2 || echo "0")
+            skipped=$(grep -o 'skipped="[0-9]*"' "$xml_file" | cut -d'"' -f2 || echo "0")
+            
+            total_tests=$((total_tests + tests))
+            failed_tests=$((failed_tests + failures + errors))
+            skipped_tests=$((skipped_tests + skipped))
+          done < <(find app/build/outputs/androidTest-results -name "TEST-*.xml" 2>/dev/null)
+          
+          if [ $total_tests -eq 0 ]; then
+            echo "⚠️ Nenhum resultado de teste encontrado"
+            exit 0
+          fi
+          
+          passed_tests=$((total_tests - failed_tests - skipped_tests))
+          
+          # Adicionar ao relatório
+          echo "📊 RESULTADOS:" >> test-reports/summary.txt
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> test-reports/summary.txt
+          echo "✅ Testes Passados:  $passed_tests" >> test-reports/summary.txt
+          echo "❌ Testes Falhados:  $failed_tests" >> test-reports/summary.txt
+          echo "⏭️  Testes Ignorados: $skipped_tests" >> test-reports/summary.txt
+          echo "📝 Total de Testes:  $total_tests" >> test-reports/summary.txt
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >> test-reports/summary.txt
+          echo "" >> test-reports/summary.txt
+          
+          # Calcular taxa de sucesso
+          if [ $total_tests -gt 0 ]; then
+            success_rate=$((passed_tests * 100 / total_tests))
+            echo "📈 Taxa de Sucesso: ${success_rate}%" >> test-reports/summary.txt
+          fi
+          
+          echo "" >> test-reports/summary.txt
+          
+          # Copiar XMLs para o relatório
+          cp -r app/build/outputs/androidTest-results test-reports/ 2>/dev/null || true
+          cp -r app/build/reports/androidTests test-reports/ 2>/dev/null || true
+          
+          # Mostrar resumo no console
+          echo ""
+          cat test-reports/summary.txt
+          echo ""
+          
+          # Definir status da pipeline baseado nos resultados
+          if [ $failed_tests -gt 0 ]; then
+            echo "::warning::$failed_tests teste(s) falharam"
+            exit 1
+          else
+            echo "::notice::Todos os $passed_tests testes passaram! ✅"
+          fi
+
+      # ==================== UPLOAD DE ARTEFATOS ====================
+
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            test-reports/
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          retention-days: 30
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 7
+
+      - name: Upload Backend Logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-logs
+          path: backend.log
+          retention-days: 3
+
+      - name: Upload Gradle Logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gradle-logs
+          path: |
+            app/build/outputs/logs/
+            ~/.gradle/daemon/*/daemon-*.out.log
+          retention-days: 3
+        # ==================== COMENTÁRIO NO PR ====================
+
+      - name: Comment PR with Test Results
+        if: always() && github.event_name == 'pull_request' && hashFiles('test-reports/summary.txt') != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const content = fs.readFileSync('test-reports/summary.txt', 'utf8');
+            
+            // Parse results
+            const passedMatch = content.match(/Testes Passados:\s+(\d+)/);
+            const failedMatch = content.match(/Testes Falhados:\s+(\d+)/);
+            const skippedMatch = content.match(/Testes Ignorados:\s+(\d+)/);
+            const totalMatch = content.match(/Total de Testes:\s+(\d+)/);
+            const successMatch = content.match(/Taxa de Sucesso:\s+(\d+)%/);
+            
+            const passed = passedMatch ? passedMatch[1] : '0';
+            const failed = failedMatch ? failedMatch[1] : '0';
+            const skipped = skippedMatch ? skippedMatch[1] : '0';
+            const total = totalMatch ? totalMatch[1] : '0';
+            const successRate = successMatch ? successMatch[1] : '0';
+            
+            const status = failed === '0' ? '✅ PASSED' : '❌ FAILED';
+            
+            const body = `## 🧪 Android System Tests ${status}
+            
+            | Métrica | Valor |
+            |---------|-------|
+            | ✅ Passados | ${passed} |
+            | ❌ Falhados | ${failed} |
+            | ⏭️ Ignorados | ${skipped} |
+            | 📝 Total | ${total} |
+            | 📈 Taxa de Sucesso | ${successRate}% |
+            
+            <details>
+            <summary>📋 Relatório Completo</summary>
+            
+            \`\`\`
+            ${content}
+            \`\`\`
+            </details>`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+      # ==================== CLEANUP ====================
+
+      - name: Stop Backend Container
+        if: always()
+        run: |
+          echo "🛑 Stopping backend container..."
+          docker stop seepaw-backend || true
+          docker rm seepaw-backend || true
+          echo "✅ Cleanup completo"
+
+      - name: Display Test Summary
+        if: always()
+        run: |
+          if [ -f test-reports/summary.txt ]; then
+            echo ""
+            echo "========================================="
+            echo "   RESUMO FINAL"
+            echo "========================================="
+            cat test-reports/summary.txt
+          fi
